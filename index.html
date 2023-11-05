@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>KBIGenerator</title>
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">\
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    <style>
+        #imageUploadModal .upload-preview img {
+            width: 100%;
+            height: auto;
+            margin-top: 10px;
+        }
+
+        #editor img {
+            display: block;
+            margin: 0 auto;
+            max-width: 50vw;
+        }
+
+        #context-menu {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 100%;
+            padding: 10px;
+            background-color: #f9f9f9;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        .context-menu-item {
+            padding: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+
+        .context-menu-item:hover {
+            background-color: #e3e3e3;
+        }
+
+        .ql-container {
+            box-sizing: border-box;
+            font-family: Helvetica, Arial, sans-serif;
+            /* font-size: 13px; */
+            font-size: 12px;
+            height: 100%;
+            margin: 0px;
+            position: relative;
+        }
+
+        .ql-editor .ql-size-small {
+            /* font-size: 0.75em; */
+            font-size: 10px;
+        }
+
+        .ql-editor .ql-size-large {
+            /* font-size: 1.5em; */
+            font-size: 14px;
+        }
+
+        .ql-editor .ql-size-huge {
+            /* font-size: 2.5em; */
+            font-size: 16px;
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-label::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item::before {
+            /* content: 'Normal'; */
+            content: '12px';
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value=small]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=small]::before {
+            /* content: 'Small'; */
+            content: '10px';
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value=large]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=large]::before {
+            /* content: 'Large'; */
+            content: '14px';
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-label[data-value=huge]::before,
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=huge]::before {
+            /* content: 'Huge'; */
+            content: '16px';
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=small]::before {
+            font-size: 10px;
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=large]::before {
+            /* font-size: 18px; */
+            font-size: 14px;
+        }
+
+        .ql-snow .ql-picker.ql-size .ql-picker-item[data-value=huge]::before {
+            /* font-size: 32px; */
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="container my-5">
+        <div class="row">
+            <div class="col-md-12">
+                <div id="editor"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Image upload modal -->
+    <div class="modal fade" id="imageUploadModal" tabindex="-1" role="dialog" aria-labelledby="imageUploadModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="imageUploadModalLabel">Upload Image</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="upload-controls">
+                        <label for="imageFile">Choose an image:</label>
+                        <input type="file" id="imageFile" accept="image/*">
+                    </div>
+                    <div class="upload-preview"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+    <script>
+        var toolbarOptions = [
+            ['bold'],
+            [{ 'color': [] }],
+            [{ 'size': ['small', false, 'large', 'huge'] }],
+            ['image']
+        ];
+        var quill = new Quill('#editor', {
+            modules: {
+                toolbar: toolbarOptions
+            },
+            theme: 'snow'
+        });
+
+        var IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
+
+        var quillContainer = $('#editor').parent();
+
+        quillContainer.on('contextmenu', function (e) {
+            $('.context-menu').hide();
+            e.preventDefault();
+
+            var selectedText = quill.getText(quill.getSelection());
+            var range = quill.getSelection(true);
+
+            var menu = $('<div>').addClass('context-menu').css({
+                left: e.pageX - quillContainer.offset().left + 'px',
+                top: e.pageY - quillContainer.offset().top + 'px',
+                position: 'absolute'
+            });
+
+            quillContainer.css({
+                position: 'relative'
+            });
+
+            quillContainer.append(menu);
+
+            var insertImageMenuItem = $('<div>').addClass('context-menu-item').text('Insert Image Here');
+            insertImageMenuItem.on('click', function () {
+                $('.ql-image').last().trigger('click');
+                $('.context-menu').hide();
+            });
+            menu.append(insertImageMenuItem);
+
+            var showMockupMenuItem = $('<div>').addClass('context-menu-item').text('Show Mockup');
+            showMockupMenuItem.on('click', function () {
+                console.log('Show Mockup option selected');
+                $('.context-menu').remove();
+            });
+            menu.append(showMockupMenuItem);
+
+            var generateKBIMenuItem = $('<div>').addClass('context-menu-item').text('Generate KBI');
+            generateKBIMenuItem.on('click', function () {
+                generateKBI();
+                $('.context-menu').remove();
+            });
+            menu.append(generateKBIMenuItem);
+        });
+
+        // Add click event listener to editor
+        $('#editor').on('click', function (e) {
+            // Remove context menu element
+            $('.context-menu').hide();
+        });
+
+        function generateKBI() {
+            // Get the content of the editor
+            var content = quill.root.innerHTML;
+
+            console.log(content);
+            // Create a new HTML file with the KBI contents
+            var kbi = '<html><head><title>Generated KBI</title></head><body>' + content + '</body></html>';
+
+            // Convert the HTML to a Blob
+            var blob = new Blob([kbi], { type: 'text/html' });
+
+            // Save the Blob as a file
+            saveAs(blob, 'generated-kbi.html');
+
+            // Copy images to a directory
+            copyImages(quill.root);
+        }
+
+        function copyImages(container) {
+            // Select all images in the container
+            var images = container.getElementsByTagName('img');
+
+            // Iterate through each image
+            for (var i = 0; i < images.length; i++) {
+                var image = images[i];
+
+                // Get the image source
+                var src = image.src;
+
+                // Check if the image is a data URI
+                if (src.startsWith('data:')) {
+                    // Convert the data URI to a Blob
+                    var blob = dataURItoBlob(src);
+
+                    // Generate a unique filename for the image
+                    var filename = 'image-' + new Date().getTime() + '-' + i + '.' + getExtensionFromMimeType(blob.type);
+
+                    // Save the Blob as a file
+                    saveAs(blob, filename);
+                }
+            }
+        }
+
+        function dataURItoBlob(dataURI) {
+            // Convert the data URI to a Blob
+            var binary = atob(dataURI.split(',')[1]);
+            var array = [];
+            for (var i = 0; i < binary.length; i++) {
+                array.push(binary.charCodeAt(i));
+            }
+            var blob = new Blob([new Uint8Array(array)], { type: getMimeTypeFromDataURI(dataURI) });
+            return blob;
+        }
+
+        function getMimeTypeFromDataURI(dataURI) {
+            // Get the MIME type of the data URI
+            var mimeType = dataURI.split(',')[0].split(':')[1].split(';')[0];
+            return mimeType;
+        }
+
+        function getExtensionFromMimeType(mimeType) {
+            // Get the file extension from the MIME type
+            var extensions = {
+                'image/jpeg': 'jpg',
+                'image/png': 'png',
+                'image/gif': 'gif'
+            };
+            var extension = extensions[mimeType];
+            return extension;
+        }
+    </script>
+</body>
+
+</html>
